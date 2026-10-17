@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor Agent Usage — 15m Time-Series Token Telemetry</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M3 3v18h18" />
+            <rect x="7" y="10" width="3" height="8" rx="1" />
+            <rect x="12" y="6" width="3" height="12" rx="1" />
+            <rect x="17" y="13" width="3" height="5" rx="1" />
+          </svg>
+        </div>
+        <div>
+          <h1>Monitor Agent Usage</h1>
+          <p class="subtitle">Proxy-Free Multi-User Time-Series Token Telemetry &bull; Grok &bull; Codex &bull; Antigravity &bull; Claude</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="sync-status" id="syncStatusText">Last sync: —</div>
+        <button class="btn btn-secondary" id="btnToggleDemo" title="Toggle sample multi-user sessions across all 4 providers">
+          Load Sample Data
+        </button>
+        <button class="btn btn-secondary" id="btnOpenAccounts">
+          Accounts &amp; Users
+        </button>
+        <button class="btn btn-primary" id="btnSyncNow">
+          <span class="sync-icon" id="syncSpinner">&#x21bb;</span> Sync Historical &amp; Live
+        </button>
+      </div>
+    </header>
+
+    <!-- Filter Controls Bar -->
+    <section class="filters-bar">
+      <div class="filter-group">
+        <label for="userSelect">User Account</label>
+        <select id="userSelect" class="select-input">
+          <option value="all">All Users</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Provider</label>
+        <div class="pill-group" id="providerPills">
+          <button class="pill active" data-value="all">All</button>
+          <button class="pill pill-antigravity" data-value="antigravity">Antigravity</button>
+          <button class="pill pill-claude" data-value="claude">Claude</button>
+          <button class="pill pill-codex" data-value="codex">Codex</button>
+          <button class="pill pill-grok" data-value="grok">Grok</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Interface</label>
+        <div class="pill-group" id="interfacePills">
+          <button class="pill active" data-value="all">All</button>
+          <button class="pill" data-value="App">App</button>
+          <button class="pill" data-value="CLI">CLI</button>
+          <button class="pill" data-value="Web">Web</button>
+          <button class="pill" data-value="VS Code">VS Code</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label for="rangeSelect">Time Window</label>
+        <select id="rangeSelect" class="select-input">
+          <option value="6">Last 6 Hours</option>
+          <option value="24" selected>Last 24 Hours</option>
+          <option value="72">Last 3 Days</option>
+          <option value="168">Last 7 Days</option>
+          <option value="720">Last 30 Days</option>
+          <option value="0">All Historical Data</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Active 15-Minute Bucket Selection Banner -->
+    <div class="bucket-banner hidden" id="bucketSelectionBanner">
+      <div class="bucket-banner-left">
+        <span class="badge-pulse"></span>
+        <strong>Filtered to 15-Minute Block:</strong>
+        <span id="selectedBucketLabel">—</span>
+        <span class="bucket-banner-sub" id="selectedBucketStats"></span>
+      </div>
+      <div class="bucket-banner-actions">
+        <button class="btn btn-xs btn-secondary" id="btnPrevBucket">&larr; Prev 15m</button>
+        <button class="btn btn-xs btn-secondary" id="btnNextBucket">Next 15m &rarr;</button>
+        <button class="btn btn-xs btn-danger" id="btnClearBucket">&times; Clear 15m Selection</button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <section class="kpi-grid">
+      <div class="kpi-card kpi-in">
+        <div class="kpi-header">
+          <span class="kpi-title">Tokens In (Uncached)</span>
+          <span class="kpi-dot dot-in"></span>
+        </div>
+        <div class="kpi-value" id="kpiTokensIn">0</div>
+        <div class="kpi-meta" id="kpiTokensInSub">Prompt &amp; context input tokens</div>
+      </div>
+
+      <div class="kpi-card kpi-out">
+        <div class="kpi-header">
+          <span class="kpi-title">Tokens Out</span>
+          <span class="kpi-dot dot-out"></span>
+        </div>
+        <div class="kpi-value" id="kpiTokensOut">0</div>
+        <div class="kpi-meta" id="kpiTokensOutSub">Completion &amp; reasoning output tokens</div>
+      </div>
+
+      <div class="kpi-card kpi-cached">
+        <div class="kpi-header">
+          <span class="kpi-title">Cached Token Utilization</span>
+          <span class="kpi-dot dot-cached"></span>
+        </div>
+        <div class="kpi-value" id="kpiTokensCached">0</div>
+        <div class="kpi-meta" id="kpiCacheHitRate">Cache hit rate: 0.0%</div>
+      </div>
+
+      <div class="kpi-card kpi-total">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Token Volume &amp; Chats</span>
+          <span class="kpi-dot dot-total"></span>
+        </div>
+        <div class="kpi-value" id="kpiTotalTokens">0</div>
+        <div class="kpi-meta" id="kpiActiveSessions">0 active chats across 0 turns</div>
+      </div>
+    </section>
+
+    <!-- 15-Minute Bucketized Time-Series Graph Card -->
+    <section class="card chart-card">
+      <div class="card-header">
+        <div>
+          <h2>Token Utilization Time-Series (15-Minute Intervals)</h2>
+          <p class="card-subtitle">
+            Click any <strong>15-minute bar</strong> below to lock selection and filter the chats table to that exact 15-minute block.
+          </p>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item"><i class="swatch swatch-in"></i> Tokens In</span>
+          <span class="legend-item"><i class="swatch swatch-out"></i> Tokens Out</span>
+          <span class="legend-item"><i class="swatch swatch-cached"></i> Cached Tokens</span>
+        </div>
+      </div>
+
+      <div class="chart-wrapper" id="chartContainer">
+        <canvas id="timeseriesCanvas"></canvas>
+        <div id="chartTooltip" class="chart-tooltip hidden"></div>
+      </div>
+    </section>
+
+    <!-- Provider & Interface Distribution Strip -->
+    <section class="distribution-grid">
+      <div class="card dist-card">
+        <h3>Consumption by Provider</h3>
+        <div id="providerBreakdownList" class="breakdown-list"></div>
+      </div>
+      <div class="card dist-card">
+        <h3>Consumption by Interface (App / CLI / Web / VS Code)</h3>
+        <div id="interfaceBreakdownList" class="breakdown-list"></div>
+      </div>
+    </section>
+
+    <!-- Chats & Consumption Table -->
+    <section class="card table-card">
+      <div class="card-header table-header">
+        <div>
+          <h2 id="tableHeading">All Chats &amp; Token Consumption</h2>
+          <p class="card-subtitle" id="tableSubheading">
+            Showing all sessions in the active time window. Click any chat row to inspect per-turn time-series events.
+          </p>
+        </div>
+        <div class="table-controls">
+          <input
+            type="search"
+            id="sessionSearchInput"
+            class="search-input"
+            placeholder="Filter by session name, model, or path..."
+          />
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="sessions-table">
+          <thead>
+            <tr>
+              <th>Session Name</th>
+              <th>User</th>
+              <th>Provider</th>
+              <th>Interface</th>
+              <th>Model</th>
+              <th class="num">Tokens In</th>
+              <th class="num">Tokens Out</th>
+              <th class="num">Cached Tokens</th>
+              <th class="num">Total &amp; Mix</th>
+              <th class="num">Turns</th>
+              <th>Last Active</th>
+            </tr>
+          </thead>
+          <tbody id="sessionsTableBody">
+            <tr>
+              <td colspan="11" class="empty-cell">Loading sessions...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Accounts & Multi-User Modal -->
+  <div class="modal-backdrop hidden" id="accountsModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <h2>Multi-User &amp; Provider Account Configuration</h2>
+          <p class="card-subtitle">
+            Configure local log directories, direct API keys, or Web session cookies (no proxy required).
+          </p>
+        </div>
+        <button class="btn-close" id="btnCloseAccounts">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-columns">
+          <!-- Add User Form -->
+          <div class="modal-panel">
+            <h3>Add User</h3>
+            <form id="addUserForm" class="stack-form">
+              <label>
+                Username
+                <input type="text" name="username" required placeholder="e.g. cstephan or teammate" />
+              </label>
+              <label>
+                Display Name
+                <input type="text" name="display_name" placeholder="e.g. Chris Stephan" />
+              </label>
+              <label>
+                Local Home Directory (Optional auto-discovery root)
+                <input type="text" name="home_dir" placeholder="e.g. /home/cstephan or /mnt/c/Users/chris" />
+              </label>
+              <button type="submit" class="btn btn-primary">Save User &amp; Auto-Discover Logs</button>
+            </form>
+
+            <h3 style="margin-top: 1.25rem;">Add Direct Provider Account</h3>
+            <form id="addAccountForm" class="stack-form">
+              <label>
+                User
+                <select name="user_id" id="modalUserSelect" required></select>
+              </label>
+              <label>
+                Provider
+                <select name="provider" id="modalProviderSelect" required>
+                  <option value="antigravity">Antigravity</option>
+                  <option value="claude">Claude (Code / Desktop / Web / API)</option>
+                  <option value="codex">Codex (CLI / VS Code / Web / API)</option>
+                  <option value="grok">Grok (xAI API / grok.com Web / CLI)</option>
+                </select>
+              </label>
+              <label>
+                Account Label
+                <input type="text" name="account_label" required placeholder="e.g. Claude Pro Web or Work Codex" />
+              </label>
+              <label>
+                Connection Type (No Proxy)
+                <select name="auth_type" id="modalAuthTypeSelect">
+                  <option value="local_fs">Local Session Logs (~/.gemini, ~/.claude, ~/.codex, ~/.grok)</option>
+                  <option value="api_key">Direct Provider Usage API Key (Anthropic / OpenAI / xAI)</option>
+                  <option value="session_cookie">Direct Web Session Token / Cookie (claude.ai / chatgpt.com / grok.com)</option>
+                </select>
+              </label>
+              <label id="fieldRootPath">
+                Local Directory Path
+                <input type="text" name="root_path" placeholder="e.g. ~/.claude or ~/.codex" />
+              </label>
+              <label id="fieldApiKey" class="hidden">
+                API Key (Admin / Usage Key)
+                <input type="password" name="api_key" placeholder="sk-ant-admin... / sk-proj-... / xai-..." />
+              </label>
+              <label id="fieldSessionToken" class="hidden">
+                Web Session Cookie / Bearer Token
+                <input type="password" name="session_token" placeholder="sessionKey=... or sso=... or Bearer token" />
+              </label>
+              <button type="submit" class="btn btn-primary">Add Account &amp; Sync</button>
+            </form>
+          </div>
+
+          <!-- Configured Accounts List -->
+          <div class="modal-panel">
+            <h3>Configured Accounts &amp; Sync Checkpoints</h3>
+            <div id="configuredAccountsList" class="accounts-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

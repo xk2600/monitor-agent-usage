@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monitor-agent-usage"
+version = "0.1.0"
+description = "Multi-user, proxy-free token usage time-series database and dashboard for Grok, Codex, Antigravity, and Claude across Web, App, VS Code, and CLI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "xk2600" }
+]
+dependencies = []
+
+[project.optional-dependencies]
+duckdb = ["duckdb>=1.0.0"]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+monitor-agent-usage = "monitor_agent_usage.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["monitor_agent_usage*"]
+
+[tool.setuptools.package-data]
+monitor_agent_usage = ["web/*.html", "web/static/*"]
