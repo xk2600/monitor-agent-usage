@@ -39,6 +39,20 @@ def get_data_dir() -> Path:
     return Path("/tmp")
 
 
+def is_dir_accessible(p: Path) -> bool:
+    """Return True if p is an existing directory accessible (readable and traversable) to the current process."""
+    try:
+        if not p.is_dir():
+            return False
+        if not os.access(p, os.R_OK | os.X_OK):
+            return False
+        with os.scandir(p) as _:
+            pass
+        return True
+    except (OSError, PermissionError):
+        return False
+
+
 def discover_user_roots(extra_roots: List[str] | None = None) -> List[Path]:
     """Discover local user home directories including WSL Windows host roots if present."""
     roots: List[Path] = []
@@ -46,38 +60,43 @@ def discover_user_roots(extra_roots: List[str] | None = None) -> List[Path]:
 
     def _add(p: Path) -> None:
         try:
+            if not is_dir_accessible(p):
+                return
             resolved = str(p.resolve())
-            if resolved not in seen and p.exists() and p.is_dir():
+            if resolved not in seen:
                 seen.add(resolved)
                 roots.append(p)
-        except OSError:
+        except (OSError, PermissionError):
             pass
 
     _add(Path.home())
 
     # Check /home/* for multi-user Linux setups
     home_parent = Path("/home")
-    if home_parent.exists():
+    if is_dir_accessible(home_parent):
         try:
             for child in sorted(home_parent.iterdir()):
                 _add(child)
-        except OSError:
+        except (OSError, PermissionError):
             pass
 
     # Check WSL Windows host user directories (/mnt/c/Users/*)
     wsl_users = Path("/mnt/c/Users")
-    if wsl_users.exists():
+    if is_dir_accessible(wsl_users):
         skip_names = {"All Users", "Default", "Default User", "Public", "desktop.ini"}
         try:
             for child in sorted(wsl_users.iterdir()):
                 if child.name not in skip_names:
                     _add(child)
-        except OSError:
+        except (OSError, PermissionError):
             pass
 
     if extra_roots:
         for raw in extra_roots:
-            _add(Path(raw).expanduser())
+            try:
+                _add(Path(raw).expanduser())
+            except (OSError, PermissionError):
+                pass
 
     return roots
 

@@ -334,6 +334,98 @@ class MonitorAgentUsageTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_permission_denied_user_root_and_collectors_graceful_handling(self) -> None:
+        import os
+        from monitor_agent_usage.config import discover_user_roots, is_dir_accessible
+
+        forbidden_dir = self.root / "forbidden_user"
+        forbidden_dir.mkdir()
+        os.chmod(forbidden_dir, 0)
+
+        # A readable directory with a forbidden subdirectory
+        partially_forbidden_dir = self.root / "partial_user"
+        partially_forbidden_dir.mkdir()
+        secret_sub = partially_forbidden_dir / "secret"
+        secret_sub.mkdir()
+        os.chmod(secret_sub, 0)
+
+        try:
+            # 1. is_dir_accessible must return False on inaccessible directory
+            self.assertFalse(is_dir_accessible(forbidden_dir))
+            self.assertTrue(is_dir_accessible(partially_forbidden_dir))
+
+            # 2. discover_user_roots must not include inaccessible directory
+            discovered = discover_user_roots(extra_roots=[str(forbidden_dir)])
+            self.assertNotIn(forbidden_dir.resolve(), [d.resolve() for d in discovered])
+
+            # Upsert test users for foreign key integrity
+            self.db.upsert_user(UserRecord(user_id="user_forb", username="forb", display_name="Forbidden User"))
+            self.db.upsert_user(UserRecord(user_id="user_partial", username="partial", display_name="Partial User"))
+
+            # 3. Test each collector directly on forbidden paths
+            for provider_cls, prov_name, root_cfg in [
+                (AntigravityCollector, "antigravity", {"root_path": str(forbidden_dir / ".gemini" / "antigravity")}),
+                (ClaudeCollector, "claude", {"root_path": str(forbidden_dir / ".claude"), "desktop_path": str(forbidden_dir / "app")}),
+                (CodexCollector, "codex", {"root_path": str(forbidden_dir / ".codex")}),
+                (GrokCollector, "grok", {"root_path": str(forbidden_dir / ".grok")}),
+            ]:
+                acct = AccountRecord(
+                    account_id=f"acct_forb_{prov_name}",
+                    user_id="user_forb",
+                    provider=prov_name,
+                    account_label=f"Forbidden {prov_name}",
+                    auth_type="local_fs",
+                    config_json=root_cfg,
+                )
+                self.db.upsert_account(acct)
+                collector = provider_cls(self.db)
+                summary = collector.collect(acct)
+                self.assertEqual(summary.sessions_scanned, 0)
+                self.assertEqual(summary.events_ingested, 0)
+
+            # 4. SyncManager.sync_all must succeed without raising PermissionError
+            cfg = AppConfig(db_path=self.db_path, extra_scan_roots=[str(forbidden_dir)])
+            mgr = SyncManager(self.db, cfg)
+            sync_res = mgr.sync_all()
+            self.assertIsInstance(sync_res, dict)
+            self.assertIn("accounts_synced", sync_res)
+
+            # 5. Collectors must safely ingest valid files in a directory that has a forbidden subfolder
+            claude_partial_root = partially_forbidden_dir / ".claude"
+            claude_projects = claude_partial_root / "projects"
+            claude_projects.mkdir(parents=True)
+            sample_jsonl = claude_projects = claude_partial_root / "projects" / "test.jsonl"
+            sample_jsonl.write_text(
+                json.dumps(
+                    {
+                        "sessionId": "partial-sess-1",
+                        "type": "summary",
+                        "summary": "Partial dir test",
+                        "message": {
+                            "usage": {"input_tokens": 100, "output_tokens": 50},
+                            "model": "claude-sonnet-4",
+                        },
+                    }
+                )
+            )
+
+            acct_claude_partial = AccountRecord(
+                account_id="acct_partial_claude",
+                user_id="user_partial",
+                provider="claude",
+                account_label="Partial Claude",
+                auth_type="local_fs",
+                config_json={"root_path": str(claude_partial_root)},
+            )
+            self.db.upsert_account(acct_claude_partial)
+            summary_partial = ClaudeCollector(self.db).collect(acct_claude_partial)
+            self.assertEqual(summary_partial.sessions_scanned, 1)
+            self.assertEqual(summary_partial.events_ingested, 1)
+
+        finally:
+            os.chmod(forbidden_dir, 0o777)
+            os.chmod(secret_sub, 0o777)
+
 
 if __name__ == "__main__":
     unittest.main()

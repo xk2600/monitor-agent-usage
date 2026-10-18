@@ -14,6 +14,10 @@ from .base import (
     make_event_id,
     normalize_interface,
     parse_timestamp,
+    safe_is_dir,
+    safe_read_text,
+    safe_rglob,
+    safe_stat_mtime,
 )
 
 
@@ -36,8 +40,8 @@ class ClaudeCollector(BaseCollector):
         # 1. Local filesystem (~/.claude/projects/**/*.jsonl)
         root_path = Path(account.config_json.get("root_path", "~/.claude")).expanduser()
         projects_dir = root_path / "projects"
-        if projects_dir.exists() and projects_dir.is_dir():
-            for jsonl_path in sorted(projects_dir.rglob("*.jsonl")):
+        if safe_is_dir(projects_dir):
+            for jsonl_path in safe_rglob(projects_dir, "*.jsonl"):
                 try:
                     sess, sess_pts = self._parse_claude_code_jsonl(jsonl_path, account)
                     if sess and sess_pts:
@@ -50,8 +54,8 @@ class ClaudeCollector(BaseCollector):
         desktop_path_raw = account.config_json.get("desktop_path")
         if desktop_path_raw:
             desktop_dir = Path(desktop_path_raw).expanduser()
-            if desktop_dir.exists():
-                for json_file in sorted(desktop_dir.rglob("*.json*")):
+            if safe_is_dir(desktop_dir):
+                for json_file in safe_rglob(desktop_dir, "*.json*"):
                     if json_file.suffix in (".json", ".jsonl"):
                         try:
                             sess, sess_pts = self._parse_claude_code_jsonl(
@@ -118,7 +122,7 @@ class ClaudeCollector(BaseCollector):
     ) -> Tuple[Optional[SessionRecord], List[TokenUsagePoint]]:
         raw_lines = [
             ln
-            for ln in jsonl_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+            for ln in safe_read_text(jsonl_path).splitlines()
             if ln.strip()
         ]
         if not raw_lines:
@@ -173,7 +177,7 @@ class ClaudeCollector(BaseCollector):
                 if not last_active_at or ts_iso > last_active_at:
                     last_active_at = ts_iso
             else:
-                ts_iso, ts_epoch = parse_timestamp(jsonl_path.stat().st_mtime)
+                ts_iso, ts_epoch = parse_timestamp(safe_stat_mtime(jsonl_path))
 
             if entry_type == "user" and not first_user_prompt:
                 txt = self._extract_user_content_text(obj.get("message"))

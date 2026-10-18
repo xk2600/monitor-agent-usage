@@ -14,6 +14,10 @@ from .base import (
     make_event_id,
     normalize_interface,
     parse_timestamp,
+    safe_is_dir,
+    safe_read_text,
+    safe_rglob,
+    safe_stat_mtime,
 )
 
 
@@ -37,9 +41,9 @@ class CodexCollector(BaseCollector):
         root_path = Path(account.config_json.get("root_path", "~/.codex")).expanduser()
         for sub in ("sessions", "archived_sessions"):
             scan_dir = root_path / sub
-            if not scan_dir.exists() or not scan_dir.is_dir():
+            if not safe_is_dir(scan_dir):
                 continue
-            for file_path in sorted(scan_dir.rglob("*.json*")):
+            for file_path in safe_rglob(scan_dir, "*.json*"):
                 if file_path.suffix not in (".jsonl", ".json"):
                     continue
                 try:
@@ -83,7 +87,7 @@ class CodexCollector(BaseCollector):
     def _parse_codex_rollout_file(
         self, file_path: Path, account: AccountRecord
     ) -> Tuple[Optional[SessionRecord], List[TokenUsagePoint]]:
-        raw_text = file_path.read_text(encoding="utf-8", errors="ignore").strip()
+        raw_text = safe_read_text(file_path).strip()
         if not raw_text:
             return None, []
 
@@ -113,7 +117,7 @@ class CodexCollector(BaseCollector):
                 continue
 
             ts_raw = obj.get("timestamp") or obj.get("created_at")
-            ts_iso, ts_epoch = parse_timestamp(ts_raw or file_path.stat().st_mtime)
+            ts_iso, ts_epoch = parse_timestamp(ts_raw or safe_stat_mtime(file_path))
             if not started_at or ts_iso < started_at:
                 started_at = ts_iso
             if not last_active_at or ts_iso > last_active_at:

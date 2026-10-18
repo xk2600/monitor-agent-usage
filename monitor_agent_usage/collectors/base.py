@@ -3,13 +3,81 @@
 from __future__ import annotations
 
 import datetime as dt
+import fnmatch
 import hashlib
+import os
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Tuple
+from pathlib import Path
+from typing import Any, List, Optional, Tuple
 
 from ..db.models import AccountRecord, SessionRecord, SyncSummary, TokenUsagePoint
 from ..db.tsdb import TimeSeriesDB
+
+
+def safe_exists(p: Path) -> bool:
+    """Check if path exists without raising PermissionError or OSError."""
+    try:
+        return p.exists()
+    except (OSError, PermissionError):
+        return False
+
+
+def safe_is_dir(p: Path) -> bool:
+    """Check if path is a directory without raising PermissionError or OSError."""
+    try:
+        return p.is_dir()
+    except (OSError, PermissionError):
+        return False
+
+
+def safe_is_file(p: Path) -> bool:
+    """Check if path is a regular file without raising PermissionError or OSError."""
+    try:
+        return p.is_file()
+    except (OSError, PermissionError):
+        return False
+
+
+def safe_iterdir(p: Path) -> List[Path]:
+    """Return list of child paths, gracefully ignoring PermissionError / OSError."""
+    try:
+        if not safe_is_dir(p):
+            return []
+        return list(p.iterdir())
+    except (OSError, PermissionError):
+        return []
+
+
+def safe_rglob(base_dir: Path, pattern: str) -> List[Path]:
+    """Recursively find files matching pattern under base_dir, safely ignoring PermissionError/OSError."""
+    if not safe_is_dir(base_dir):
+        return []
+    results: List[Path] = []
+    try:
+        for root, _, files in os.walk(str(base_dir), onerror=lambda _: None):
+            for filename in files:
+                if fnmatch.fnmatch(filename, pattern):
+                    results.append(Path(root) / filename)
+    except (OSError, PermissionError):
+        pass
+    return sorted(results)
+
+
+def safe_read_text(p: Path, encoding: str = "utf-8", errors: str = "ignore") -> str:
+    """Safely read file text, ignoring PermissionError / OSError."""
+    try:
+        return p.read_text(encoding=encoding, errors=errors)
+    except (OSError, PermissionError):
+        return ""
+
+
+def safe_stat_mtime(p: Path, default: Optional[float] = None) -> Optional[float]:
+    """Safely return file mtime, ignoring PermissionError / OSError."""
+    try:
+        return p.stat().st_mtime
+    except (OSError, PermissionError):
+        return default
 
 
 def parse_timestamp(raw: Any) -> Tuple[str, int]:

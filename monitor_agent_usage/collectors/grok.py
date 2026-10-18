@@ -14,6 +14,10 @@ from .base import (
     make_event_id,
     normalize_interface,
     parse_timestamp,
+    safe_is_dir,
+    safe_read_text,
+    safe_rglob,
+    safe_stat_mtime,
 )
 
 
@@ -39,12 +43,15 @@ class GrokCollector(BaseCollector):
         seen_files: set[str] = set()
 
         for base_dir in candidate_dirs:
-            if not base_dir.exists() or not base_dir.is_dir():
+            if not safe_is_dir(base_dir):
                 continue
-            for file_path in sorted(base_dir.rglob("*.json*")):
+            for file_path in safe_rglob(base_dir, "*.json*"):
                 if file_path.suffix not in (".json", ".jsonl"):
                     continue
-                resolved = str(file_path.resolve())
+                try:
+                    resolved = str(file_path.resolve())
+                except (OSError, PermissionError):
+                    resolved = str(file_path)
                 if resolved in seen_files:
                     continue
                 seen_files.add(resolved)
@@ -89,7 +96,7 @@ class GrokCollector(BaseCollector):
     def _parse_local_grok_file(
         self, file_path: Path, account: AccountRecord
     ) -> Tuple[Optional[SessionRecord], List[TokenUsagePoint]]:
-        raw_text = file_path.read_text(encoding="utf-8", errors="ignore").strip()
+        raw_text = safe_read_text(file_path).strip()
         if not raw_text:
             return None, []
 
@@ -149,7 +156,7 @@ class GrokCollector(BaseCollector):
                 session_name = extract_clean_session_title(str(obj["content"]), fallback="")
 
             ts_raw = obj.get("timestamp") or obj.get("created_at") or obj.get("createTime")
-            ts_iso, ts_epoch = parse_timestamp(ts_raw or file_path.stat().st_mtime)
+            ts_iso, ts_epoch = parse_timestamp(ts_raw or safe_stat_mtime(file_path))
             if not started_at or ts_iso < started_at:
                 started_at = ts_iso
             if not last_active_at or ts_iso > last_active_at:

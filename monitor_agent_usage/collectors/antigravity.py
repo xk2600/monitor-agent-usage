@@ -15,6 +15,12 @@ from .base import (
     make_event_id,
     normalize_interface,
     parse_timestamp,
+    safe_exists,
+    safe_is_dir,
+    safe_is_file,
+    safe_iterdir,
+    safe_read_text,
+    safe_rglob,
 )
 
 
@@ -42,21 +48,16 @@ class AntigravityCollector(BaseCollector):
 
         # 1. Scan brain/<conversation-id>/.system_generated/logs/transcript.jsonl
         brain_dir = root_dir / "brain"
-        if brain_dir.exists() and brain_dir.is_dir():
-            try:
-                conv_dirs = sorted([d for d in brain_dir.iterdir() if d.is_dir()])
-            except OSError as exc:
-                summary.errors.append(f"Cannot list {brain_dir}: {exc}")
-                conv_dirs = []
-
-            for conv_dir in conv_dirs:
+        if safe_is_dir(brain_dir):
+            conv_dirs = [d for d in safe_iterdir(brain_dir) if safe_is_dir(d)]
+            for conv_dir in sorted(conv_dirs):
                 conv_id = conv_dir.name
                 if conv_id.startswith("."):
                     continue
                 transcript_path = conv_dir / ".system_generated" / "logs" / "transcript.jsonl"
-                if not transcript_path.exists():
+                if not safe_exists(transcript_path):
                     transcript_path = conv_dir / ".system_generated" / "logs" / "transcript_full.jsonl"
-                if not transcript_path.exists():
+                if not safe_exists(transcript_path):
                     continue
 
                 try:
@@ -73,8 +74,8 @@ class AntigravityCollector(BaseCollector):
                     summary.errors.append(f"Error parsing Antigravity session {conv_id}: {exc}")
 
         # 2. Scan ~/.gemini/antigravity-cli/ if present
-        if cli_dir.exists() and cli_dir.is_dir():
-            for jsonl_file in sorted(cli_dir.rglob("*.jsonl")):
+        if safe_is_dir(cli_dir):
+            for jsonl_file in safe_rglob(cli_dir, "*.jsonl"):
                 try:
                     conv_id = f"agy-cli-{jsonl_file.stem}"
                     sess, sess_points = self._parse_brain_transcript(
@@ -113,15 +114,15 @@ class AntigravityCollector(BaseCollector):
     def _extract_artifact_title(self, conv_dir: Path) -> Optional[str]:
         for md_name in ("implementation_plan.md", "task.md", "walkthrough.md"):
             candidate = conv_dir / md_name
-            if candidate.exists():
+            if safe_is_file(candidate):
                 try:
-                    for line in candidate.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    for line in safe_read_text(candidate).splitlines():
                         line_s = line.strip()
                         if line_s.startswith("# "):
                             title = line_s.lstrip("# ").strip()
                             if title:
                                 return title[:76]
-                except OSError:
+                except Exception:
                     pass
         return None
 
@@ -133,7 +134,7 @@ class AntigravityCollector(BaseCollector):
         account: AccountRecord,
         forced_interface: Optional[str] = None,
     ) -> Tuple[Optional[SessionRecord], List[TokenUsagePoint]]:
-        raw_text = transcript_path.read_text(encoding="utf-8", errors="ignore")
+        raw_text = safe_read_text(transcript_path)
         raw_lines = [ln for ln in raw_text.splitlines() if ln.strip()]
         if not raw_lines:
             return None, []

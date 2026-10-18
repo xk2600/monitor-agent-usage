@@ -135,6 +135,17 @@ class SyncManager:
                 summaries.append(res.to_dict())
                 total_sessions += res.sessions_scanned
                 total_events += res.events_ingested
+            except PermissionError as exc:
+                logger.debug("Permission denied syncing account %s: %s", account.account_id, exc)
+                now_iso, _ = parse_timestamp(None)
+                summaries.append(
+                    SyncSummary(
+                        provider=account.provider,
+                        account_id=account.account_id,
+                        errors=[f"Permission denied: {exc}"],
+                        synced_at=now_iso,
+                    ).to_dict()
+                )
             except Exception as exc:
                 logger.exception("Error syncing account %s", account.account_id)
                 now_iso, _ = parse_timestamp(None)
@@ -168,6 +179,8 @@ class SyncManager:
             while not self._stop_event.is_set():
                 try:
                     self.sync_all()
+                except PermissionError as exc:
+                    logger.debug("Background sync permission error: %s", exc)
                 except Exception as exc:
                     logger.warning("Background sync error: %s", exc)
                 self._stop_event.wait(interval_seconds)
