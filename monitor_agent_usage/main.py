@@ -20,6 +20,8 @@ from .services import SyncManager
 
 
 WEB_DIR = Path(__file__).parent / "web"
+DOCS_DIR = WEB_DIR / "docs"
+FALLBACK_DOCS_DIR = Path(__file__).resolve().parent.parent / "site"
 
 
 class DashboardRequestHandler(BaseHTTPRequestHandler):
@@ -76,6 +78,33 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
 
         if path in ("/", "/index.html"):
             self._send_file(WEB_DIR / "index.html")
+            return
+
+        if path == "/docs":
+            self.send_response(HTTPStatus.MOVED_PERMANENTLY)
+            self.send_header("Location", "/docs/")
+            self.end_headers()
+            return
+
+        if path.startswith("/docs/"):
+            rel = path[len("/docs/") :].strip("/")
+            docs_root = DOCS_DIR if DOCS_DIR.exists() else FALLBACK_DOCS_DIR
+            if not docs_root.exists():
+                self._send_json(
+                    {
+                        "error": "Documentation site not built yet. Run 'make docs-build' to generate docs.",
+                        "portal": "http://127.0.0.1:8420/",
+                    },
+                    status=HTTPStatus.NOT_FOUND,
+                )
+                return
+            safe_target = (docs_root / (rel or "index.html")).resolve()
+            if safe_target.is_dir():
+                safe_target = safe_target / "index.html"
+            if str(safe_target).startswith(str(docs_root.resolve())) and safe_target.exists():
+                self._send_file(safe_target)
+                return
+            self._send_json({"error": "Documentation page not found"}, status=HTTPStatus.NOT_FOUND)
             return
 
         if path.startswith("/static/"):

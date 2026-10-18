@@ -1,0 +1,85 @@
+site_name: Monitor Agent Usage
+site_description: Proxy-Free Multi-User Token Usage Time-Series Database & Interactive Web Portal Documentation
+site_author: xk2600
+site_url: http://127.0.0.1:8420/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.instant
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+
+extra:
+  social:
+    - icon: fontawesome/solid/chart-line
+      link: http://127.0.0.1:8420
+      name: Live Token Usage Portal
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.keys
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Overview: index.md
+  - Architecture:
+      - System Architecture: architecture/overview.md
+      - Synchronization & Backfill Engine: architecture/sync-engine.md
+      - Multi-User & Platform Discovery: architecture/multi-user-discovery.md
+  - Database & Metrics:
+      - Schema & Entity Relationships: database/schema.md
+      - Queries & Data Retrieval: database/queries.md
+      - Statistical Formulae & Metrics: database/statistical-formulae.md
+  - User Guide:
+      - Interactive Web Dashboard: usage/web-dashboard.md
+      - Historical Usage Portal: usage/portal.md
+      - Accounts & Multi-User Management: usage/accounts-and-users.md
+      - CLI Commands & Automation: usage/cli.md
+  - Development & Contributing:
+      - Getting Started: development/getting-started.md
+      - Building Collectors: development/collector-guide.md
+      - Testing & Quality: development/testing.md
+      - REST API Reference: development/api-reference.md
+

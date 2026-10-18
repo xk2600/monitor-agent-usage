@@ -17,8 +17,10 @@ dependencies = []
 [project.optional-dependencies]
 duckdb = ["duckdb>=1.0.0"]
 dev = ["pytest>=8.0.0"]
+docs = ["mkdocs>=1.5.0", "mkdocs-material>=9.5.0"]
 
 [project.scripts]
+monitor_agent_usage = "monitor_agent_usage.main:main"
 monitor-agent-usage = "monitor_agent_usage.main:main"
 
 [tool.setuptools.packages.find]

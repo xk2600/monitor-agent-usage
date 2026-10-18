@@ -13,4 +13,7 @@ venv/
 *.duckdb
 .pytest_cache/
 .coverage
-.data/
+.data
+.data/**
+site/
+monitor_agent_usage/web/docs/

@@ -330,6 +330,12 @@ class MonitorAgentUsageTests(unittest.TestCase):
                 filtered = json.loads(resp2.read().decode("utf-8"))
             self.assertEqual(filtered["filters"]["selected_bucket_epoch"], chosen_bucket)
             self.assertEqual(len(filtered["sessions"]), active_buckets[0]["session_count"])
+
+            # Verify MkDocs portal integration endpoint (/docs/)
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/docs/") as docs_resp:
+                self.assertEqual(docs_resp.status, 200)
+                docs_html = docs_resp.read().decode("utf-8")
+                self.assertIn("Monitor Agent Usage", docs_html)
         finally:
             server.shutdown()
             server.server_close()
